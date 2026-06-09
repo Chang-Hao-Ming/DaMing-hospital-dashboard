@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>醫院業務管理儀表板</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root {
+  --bg:#f5f6fa; --card:#fff; --sidebar:#1a2340; --sidebar-hover:#2a3a5c;
+  --accent:#378ADD; --green:#1D9E75; --red:#D85A30; --purple:#7F77DD; --gold:#BA7517;
+  --text:#1a1a2e; --sub:#6b7280; --border:#e5e7eb; --r:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);display:flex;min-height:100vh}
+
+/* Sidebar */
+.sidebar{width:220px;min-height:100vh;background:var(--sidebar);display:flex;flex-direction:column;flex-shrink:0;position:fixed;top:0;left:0;height:100vh;z-index:100}
+.sidebar-logo{padding:22px 20px 14px;border-bottom:1px solid rgba(255,255,255,.08)}
+.sidebar-logo .hn{color:#fff;font-size:15px;font-weight:600;line-height:1.4}
+.sidebar-logo .sv{color:rgba(255,255,255,.4);font-size:11px;margin-top:2px}
+.nav{padding:10px 0;flex:1}
+.nav-sec{padding:8px 20px 4px;font-size:10px;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.06em}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 20px;cursor:pointer;color:rgba(255,255,255,.6);font-size:13px;transition:all .15s;border-left:3px solid transparent}
+.nav-item:hover{background:var(--sidebar-hover);color:#fff}
+.nav-item.active{background:var(--sidebar-hover);color:#fff;border-left-color:var(--accent)}
+.nav-item .ico{width:18px;text-align:center;font-size:15px}
+.nbadge{margin-left:auto;font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(255,255,255,.1);color:rgba(255,255,255,.45)}
+.nbadge.live{background:rgba(29,158,117,.25);color:#1D9E75}
+.sidebar-footer{padding:14px 20px;border-top:1px solid rgba(255,255,255,.08);font-size:10px;color:rgba(255,255,255,.3)}
+
+/* Main */
+.main{margin-left:220px;flex:1;min-height:100vh}
+.topbar{background:var(--card);border-bottom:1px solid var(--border);padding:13px 26px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.topbar-title{font-size:16px;font-weight:600}
+.date-badge{font-size:12px;color:var(--sub);background:var(--bg);padding:5px 12px;border-radius:20px;border:1px solid var(--border)}
+
+/* Year selector */
+.year-bar{display:flex;align-items:center;gap:8px;padding:16px 26px 0;flex-wrap:wrap}
+.year-bar .label{font-size:12px;color:var(--sub);margin-right:4px}
+.ybtn{font-size:13px;font-weight:500;padding:6px 18px;border:1.5px solid var(--border);border-radius:20px;background:transparent;color:var(--sub);cursor:pointer;transition:all .15s;position:relative}
+.ybtn:hover{border-color:var(--accent);color:var(--accent)}
+.ybtn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.ybtn.no-data{opacity:.45;cursor:default}
+.ybtn.no-data:hover{border-color:var(--border);color:var(--sub)}
+.ybtn .ybadge{position:absolute;top:-6px;right:-6px;font-size:9px;background:#e5e7eb;color:var(--sub);padding:1px 5px;border-radius:8px}
+.ybtn.active .ybadge{background:rgba(255,255,255,.3);color:#fff}
+
+.content{padding:20px 26px}
+.page{display:none}.page.active{display:block}
+
+/* KPI */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px}
+.kpi-card{background:var(--card);border-radius:var(--r);padding:14px 16px;border:1px solid var(--border)}
+.kpi-label{font-size:11px;color:var(--sub);margin-bottom:5px}
+.kpi-val{font-size:21px;font-weight:600;line-height:1.2}
+.kpi-sub{font-size:11px;color:var(--sub);margin-top:3px}
+.up{color:var(--green)}.dn{color:var(--red)}
+
+/* Cards */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.chart-card{background:var(--card);border-radius:var(--r);padding:16px 18px;border:1px solid var(--border);margin-bottom:14px}
+.chart-card.no-mb{margin-bottom:0}
+.chart-title{font-size:12px;font-weight:500;color:var(--sub);margin-bottom:12px}
+.leg{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px;font-size:11px;color:var(--sub)}
+.leg span{display:flex;align-items:center;gap:4px}
+.lb{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.note{font-size:11px;color:var(--sub);margin-top:8px;padding-top:7px;border-top:1px solid var(--border)}
+
+/* Sub-tabs */
+.stabs{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap}
+.stab{font-size:12px;padding:5px 14px;border:1px solid var(--border);border-radius:20px;background:transparent;color:var(--sub);cursor:pointer;transition:all .15s}
+.stab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* Table */
+.dtbl{width:100%;border-collapse:collapse;font-size:12px}
+.dtbl th{font-size:11px;font-weight:500;color:var(--sub);text-align:right;padding:7px 10px;border-bottom:2px solid var(--border);background:var(--bg)}
+.dtbl th:first-child{text-align:left}
+.dtbl td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--border)}
+.dtbl td:first-child{text-align:left;color:var(--sub);font-weight:500}
+.dtbl tr:last-child td{font-weight:600;background:var(--bg)}
+.dtbl tr:hover td{background:#f9fafb}
+
+/* No data placeholder */
+.no-data-box{text-align:center;padding:60px 20px;color:var(--sub)}
+.no-data-box .big{font-size:40px;margin-bottom:14px}
+.no-data-box h3{font-size:16px;color:var(--text);margin-bottom:8px}
+.no-data-box p{font-size:13px;line-height:1.7}
+.no-data-box .hint{display:inline-block;margin-top:14px;font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:10px 18px;color:var(--sub)}
+
+/* Coming soon */
+.coming-soon{text-align:center;padding:70px 20px;color:var(--sub)}
+.coming-soon .big{font-size:44px;margin-bottom:14px}
+.coming-soon h3{font-size:17px;color:var(--text);margin-bottom:8px}
+.coming-soon p{font-size:13px;line-height:1.7}
+
+/* Overview summary */
+.sum-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-bottom:18px}
+.sum-card{background:var(--card);border-radius:var(--r);padding:14px 16px;border:1px solid var(--border);display:flex;align-items:center;gap:12px;cursor:pointer;transition:box-shadow .15s}
+.sum-card:hover{box-shadow:0 2px 12px rgba(0,0,0,.07)}
+.sum-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.sum-info .lbl{font-size:11px;color:var(--sub);margin-bottom:3px}
+.sum-info .val{font-size:17px;font-weight:600}
+.sum-info .tr{font-size:11px;margin-top:2px;color:var(--sub)}
+
+@media(max-width:768px){
+  .sidebar{width:56px}
+  .sidebar .nav-item .label,.sidebar-logo .hn,.sidebar-logo .sv,.nav-sec,.nbadge,.sidebar-footer{display:none}
+  .main{margin-left:56px}
+  .grid-2{grid-template-columns:1fr}
+  .content{padding:14px}
+  .topbar{padding:11px 14px}
+  .year-bar{padding:12px 14px 0}
+}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="hn">醫院業務<br>管理系統</div>
+    <div class="sv">Dashboard v1.1</div>
+  </div>
+  <nav class="nav">
+    <div class="nav-sec">主要業務</div>
+    <div class="nav-item active" onclick="showPage('overview',this)"><span class="ico">📊</span><span class="label">總覽</span></div>
+    <div class="nav-item" onclick="showPage('ucc',this)"><span class="ico">🚑</span><span class="label">UCC 緊急照護</span><span class="nbadge live">有資料</span></div>
+    <div class="nav-item" onclick="showPage('checkup',this)"><span class="ico">🔬</span><span class="label">健檢（自費）</span><span class="nbadge">待匯入</span></div>
+    <div class="nav-item" onclick="showPage('surgery',this)"><span class="ico">🩺</span><span class="label">外科處置</span><span class="nbadge">待匯入</span></div>
+    <div class="nav-item" onclick="showPage('internal',this)"><span class="ico">💊</span><span class="label">內科門診</span><span class="nbadge">待匯入</span></div>
+  </nav>
+  <div class="sidebar-footer">最後更新：2026/06</div>
+</aside>
+
+<main class="main">
+  <div class="topbar">
+    <div class="topbar-title" id="pageTitle">業務總覽</div>
+    <div class="date-badge" id="todayDate"></div>
+  </div>
+
+  <!-- Year bar (hidden on overview) -->
+  <div class="year-bar" id="yearBar" style="display:none">
+    <span class="label">年度：</span>
+    <button class="ybtn no-data" onclick="setYear(2023,this)" id="ybtn-2023">2023年<span class="ybadge">無資料</span></button>
+    <button class="ybtn no-data" onclick="setYear(2024,this)" id="ybtn-2024">2024年<span class="ybadge">無資料</span></button>
+    <button class="ybtn active" onclick="setYear(2025,this)" id="ybtn-2025">2025年<span class="ybadge">有資料</span></button>
+    <button class="ybtn no-data" onclick="setYear(2026,this)" id="ybtn-2026">2026年<span class="ybadge">部分</span></button>
+  </div>
+
+  <div class="content">
+
+    <!-- ===== 總覽 ===== -->
+    <div class="page active" id="page-overview">
+      <div class="sum-row">
+        <div class="sum-card" onclick="showPage('ucc',document.querySelectorAll('.nav-item')[1])">
+          <div class="sum-icon" style="background:#EBF5FF">🚑</div>
+          <div class="sum-info"><div class="lbl">UCC 累計申報件數</div><div class="val" style="color:var(--accent)">1,552 件</div><div class="tr up">↑ 2025年11月－5月</div></div>
+        </div>
+        <div class="sum-card" onclick="showPage('ucc',document.querySelectorAll('.nav-item')[1])">
+          <div class="sum-icon" style="background:#EDFAF5">💰</div>
+          <div class="sum-info"><div class="lbl">UCC 累計申請金額</div><div class="val" style="color:var(--green)">188.6 萬元</div><div class="tr" style="color:var(--sub)">含春節、連假加成</div></div>
+        </div>
+        <div class="sum-card" onclick="showPage('checkup',document.querySelectorAll('.nav-item')[2])">
+          <div class="sum-icon" style="background:#FFF4ED">🔬</div>
+          <div class="sum-info"><div class="lbl">健檢（自費）</div><div class="val" style="color:var(--red)">待匯入</div><div class="tr">點此新增資料</div></div>
+        </div>
+        <div class="sum-card" onclick="showPage('surgery',document.querySelectorAll('.nav-item')[3])">
+          <div class="sum-icon" style="background:#F3F0FF">🩺</div>
+          <div class="sum-info"><div class="lbl">外科處置</div><div class="val" style="color:var(--purple)">待匯入</div><div class="tr">點此新增資料</div></div>
+        </div>
+        <div class="sum-card" onclick="showPage('internal',document.querySelectorAll('.nav-item')[4])">
+          <div class="sum-icon" style="background:#FFFBEB">💊</div>
+          <div class="sum-info"><div class="lbl">內科門診</div><div class="val" style="color:var(--gold)">待匯入</div><div class="tr">點此新增資料</div></div>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">UCC 月份申請金額趨勢（2025年）</div>
+        <div class="leg"><span><span class="lb" style="background:var(--accent)"></span>申請金額</span><span><span class="lb" style="background:var(--green)"></span>申報件數</span></div>
+        <canvas id="ov-rev" height="200"></canvas>
+        <div class="note">其他業務資料匯入後將自動整合至此總覽頁</div>
+      </div>
+      <div class="grid-2">
+        <div class="chart-card no-mb">
+          <div class="chart-title">UCC 內科 vs 外科申請金額佔比</div>
+          <canvas id="ov-pie" height="200"></canvas>
+        </div>
+        <div class="chart-card no-mb">
+          <div class="chart-title">UCC 月份初診率（2025年）</div>
+          <canvas id="ov-init" height="200"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== UCC ===== -->
+    <div class="page" id="page-ucc">
+      <div class="stabs">
+        <button class="stab active" onclick="setUccTab('summary',this)">月份彙總</button>
+        <button class="stab" onclick="setUccTab('weekly',this)">週次明細</button>
+        <button class="stab" onclick="setUccTab('revenue',this)">申報金額</button>
+        <button class="stab" onclick="setUccTab('compare',this)">年度比較</button>
+        <button class="stab" onclick="setUccTab('table',this)">明細表</button>
+      </div>
+      <div id="ucc-content"></div>
+    </div>
+
+    <!-- ===== 健檢 ===== -->
+    <div class="page" id="page-checkup">
+      <div class="coming-soon"><div class="big">🔬</div><h3>健檢（自費）資料待匯入</h3><p>請將健檢人次、套餐分類、收入等資料提供給我，<br>即可加入儀表板顯示。</p></div>
+    </div>
+
+    <!-- ===== 外科 ===== -->
+    <div class="page" id="page-surgery">
+      <div class="coming-soon"><div class="big">🩺</div><h3>外科處置資料待匯入</h3><p>請將外科處置人次、項目分類、健保申報等資料提供給我，<br>即可加入儀表板顯示。</p></div>
+    </div>
+
+    <!-- ===== 內科 ===== -->
+    <div class="page" id="page-internal">
+      <div class="coming-soon"><div class="big">💊</div><h3>內科門診資料待匯入</h3><p>請將一般門診、慢性病人次、健保申報點數等資料提供給我，<br>即可加入儀表板顯示。</p></div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+// ==============================
+// DATA — 之後補年度只需在這裡加
+// ==============================
+const DATA = {
+  2023: null, // 待補
+  2024: null, // 待補
+  2025: {
+    monthly: [
+      {m:'11月',pt:136,内科件:70,外科件:66,申請:201640,内科申請:99537,外科申請:102103,初診:56,初診率:41.2},
+      {m:'12月',pt:143,内科件:70,外科件:73,申請:184505,内科申請:87345,外科申請:97160,初診:45,初診率:31.5},
+    ],
+    weekly: [
+      {d:'11/02',m:'11月',di:4,ds:7,ni:7,ns:1},{d:'11/09',m:'11月',di:12,ds:10,ni:7,ns:5},
+      {d:'11/16',m:'11月',di:5,ds:14,ni:5,ns:4},{d:'11/30a',m:'11月',di:6,ds:10,ni:4,ns:6},
+      {d:'11/30b',m:'11月',di:12,ds:5,ni:7,ns:5},{d:'12/07',m:'12月',di:7,ds:5,ni:5,ns:4},
+      {d:'12/14',m:'12月',di:8,ds:5,ni:4,ns:8},{d:'12/21',m:'12月',di:13,ds:13,ni:7,ns:4},
+      {d:'12/25',m:'12月',di:9,ds:6,ni:6,ns:5},{d:'12/28',m:'12月',di:7,ds:16,ni:4,ns:7},
+    ],
+    note: '2025年資料目前涵蓋 11–12月'
+  },
+  2026: {
+    monthly: [
+      {m:'1月', pt:162,内科件:85,外科件:77,申請:239058,内科申請:131611,外科申請:107447,初診:62,初診率:38.3},
+      {m:'2月', pt:542,内科件:329,外科件:213,申請:706891,内科申請:390282,外科申請:316609,初診:234,初診率:43.2},
+      {m:'3月', pt:166,内科件:90,外科件:76,申請:214858,内科申請:112435,外科申請:102423,初診:66,初診率:39.8},
+      {m:'4月', pt:190,内科件:86,外科件:104,申請:258061,内科申請:101831,外科申請:156230,初診:60,初診率:31.6},
+      {m:'5月', pt:213,内科件:88,外科件:125,申請:281429,内科申請:98865,外科申請:182564,初診:67,初診率:31.5},
+      {m:'6月', pt:32,内科件:16,外科件:16,申請:null,内科申請:null,外科申請:null,初診:null,初診率:null},
+    ],
+    weekly: [
+      {d:'01/01',m:'1月',di:7,ds:7,ni:5,ns:4},{d:'01/04',m:'1月',di:11,ds:8,ni:6,ns:6},
+      {d:'01/11',m:'1月',di:7,ds:9,ni:7,ns:2},{d:'01/18',m:'1月',di:14,ds:12,ni:8,ns:13},
+      {d:'01/25',m:'1月',di:14,ds:13,ni:6,ns:4},{d:'02/01',m:'2月',di:11,ds:5,ni:6,ns:4},
+      {d:'02/08',m:'2月',di:8,ds:5,ni:2,ns:6},{d:'02/14',m:'2月',di:10,ds:12,ni:5,ns:11},
+      {d:'02/15',m:'2月',di:16,ds:18,ni:9,ns:13},{d:'02/17',m:'2月',di:36,ds:15,ni:18,ns:4},
+      {d:'02/18',m:'2月',di:26,ds:20,ni:18,ns:14},{d:'02/19',m:'2月',di:27,ds:10,ni:33,ns:7},
+      {d:'02/20',m:'2月',di:23,ds:22,ni:25,ns:9},{d:'02/22',m:'2月',di:17,ds:18,ni:18,ns:9},
+      {d:'02/28',m:'2月',di:5,ds:20,ni:8,ns:4},{d:'03/01',m:'3月',di:10,ds:11,ni:6,ns:5},
+      {d:'03/08',m:'3月',di:12,ds:9,ni:3,ns:10},{d:'03/15',m:'3月',di:8,ds:9,ni:11,ns:7},
+      {d:'03/22',m:'3月',di:12,ds:11,ni:12,ns:5},{d:'03/29',m:'3月',di:9,ds:5,ni:7,ns:4},
+      {d:'04/04',m:'4月',di:6,ds:12,ni:4,ns:7},{d:'04/05',m:'4月',di:7,ds:7,ni:5,ns:6},
+      {d:'04/06',m:'4月',di:8,ds:13,ni:5,ns:10},{d:'04/12',m:'4月',di:4,ds:11,ni:9,ns:9},
+      {d:'04/19',m:'4月',di:5,ds:9,ni:7,ns:9},{d:'04/26',m:'4月',di:12,ds:10,ni:10,ns:6},
+      {d:'05/02',m:'5月',di:8,ds:12,ni:5,ns:7},{d:'05/03',m:'5月',di:9,ds:16,ni:4,ns:8},
+      {d:'05/10',m:'5月',di:11,ds:12,ni:8,ns:5},{d:'05/17',m:'5月',di:5,ds:17,ni:9,ns:5},
+      {d:'05/24',m:'5月',di:13,ds:15,ni:6,ns:7},{d:'05/31',m:'5月',di:5,ds:17,ni:7,ns:6},
+      {d:'06/07',m:'6月',di:11,ds:7,ni:5,ns:9},
+    ],
+    note: '2026年資料涵蓋 1–6月（6月僅部分）；2月含春節加成，4月含清明連假加成'
+  }
+};
+
+// 處理週次衍生欄位
+Object.values(DATA).forEach(yr => {
+  if(!yr) return;
+  yr.weekly.forEach(w=>{w.total=w.di+w.ds+w.ni+w.ns;w.day=w.di+w.ds;w.night=w.ni+w.ns;w.surgery=w.ds+w.ns;w.internal=w.di+w.ni;});
+});
+
+// ==============================
+// STATE
+// ==============================
+let currentPage = 'overview';
+let currentYear = 2026;
+let currentUccTab = 'summary';
+let allCharts = {};
+
+const fmt = n => n==null?'—':n>=10000?(n/10000).toFixed(1)+'萬':n.toLocaleString();
+const fmtN = n => n==null?'—':n.toLocaleString();
+
+function dc(ids){ ids.forEach(id=>{ if(allCharts[id]){try{allCharts[id].destroy();}catch(e){} delete allCharts[id];} }); }
+
+// ==============================
+// NAV
+// ==============================
+function showPage(id, el){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  if(el) el.classList.add('active');
+  const titles={overview:'業務總覽',ucc:'UCC 緊急照護',checkup:'健檢（自費）',surgery:'外科處置',internal:'內科門診'};
+  document.getElementById('pageTitle').textContent = titles[id];
+  document.getElementById('yearBar').style.display = (id==='overview') ? 'none' : 'flex';
+  currentPage = id;
+  if(id==='overview') initOverview();
+  if(id==='ucc') renderUcc();
+}
+
+// ==============================
+// YEAR
+// ==============================
+function setYear(yr, btn){
+  const d = DATA[yr];
+  if(!d){ return; } // no-data years do nothing
+  currentYear = yr;
+  document.querySelectorAll('.ybtn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  if(currentPage==='ucc') renderUcc();
+}
+
+// ==============================
+// OVERVIEW
+// ==============================
+function initOverview(){
+  dc(['ov-rev','ov-pie','ov-init']);
+  // Combine 2025+2026 monthly for overview
+  const all = [...(DATA[2025].monthly), ...(DATA[2026].monthly)];
+  const valid = all.filter(m=>m.申請!=null);
+  const ML = all.map(m=>m.m);
+
+  allCharts['ov-rev'] = new Chart(document.getElementById('ov-rev'),{
+    type:'bar',
+    data:{labels:valid.map(m=>m.m),datasets:[
+      {label:'申請金額',data:valid.map(m=>m.申請),backgroundColor:'#378ADD88',yAxisID:'y',order:2,borderRadius:4},
+      {label:'件數',data:valid.map(m=>m.pt),borderColor:'#1D9E75',type:'line',tension:.3,borderWidth:2,borderDash:[4,3],yAxisID:'y2',order:1,pointRadius:4,backgroundColor:'transparent'},
+    ]},
+    options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{autoSkip:false,font:{size:10}}},y:{ticks:{callback:v=>fmt(v),font:{size:10}}},y2:{position:'right',ticks:{font:{size:10}}}}}
+  });
+  const totI=valid.reduce((a,m)=>a+m.内科申請,0), totS=valid.reduce((a,m)=>a+m.外科申請,0);
+  allCharts['ov-pie'] = new Chart(document.getElementById('ov-pie'),{
+    type:'doughnut',
+    data:{labels:['內科','外科'],datasets:[{data:[totI,totS],backgroundColor:['#D85A3099','#BA751799'],borderWidth:0}]},
+    options:{responsive:true,cutout:'60%',plugins:{legend:{position:'right',labels:{font:{size:11}}}}}
+  });
+  const initValid = valid.filter(m=>m.初診率!=null);
+  allCharts['ov-init'] = new Chart(document.getElementById('ov-init'),{
+    type:'line',
+    data:{labels:initValid.map(m=>m.m),datasets:[{label:'初診率%',data:initValid.map(m=>m.初診率),borderColor:'#7F77DD',backgroundColor:'#7F77DD18',tension:.3,fill:true,borderWidth:2,pointRadius:4}]},
+    options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{autoSkip:false,font:{size:10}}},y:{ticks:{callback:v=>v+'%',font:{size:10}},min:20,max:55}}}
+  });
+}
+
+// ==============================
+// UCC
+// ==============================
+function setUccTab(tab, btn){
+  document.querySelectorAll('.stab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  currentUccTab = tab;
+  renderUcc();
+}
+
+function renderUcc(){
+  const d = DATA[currentYear];
+  const cont = document.getElementById('ucc-content');
+  if(!d){
+    cont.innerHTML = `<div class="no-data-box">
+      <div class="big">📂</div>
+      <h3>${currentYear}年 資料尚未匯入</h3>
+      <p>請將該年度的申報資料提供給系統管理員，<br>即可在此年度顯示完整圖表。</p>
+      <span class="hint">💡 目前有資料的年度：2025、2026</span>
+    </div>`;
+    return;
+  }
+
+  const monthly = d.monthly;
+  const weekly = d.weekly;
+  const valid = monthly.filter(m=>m.申請!=null);
+  const ML = monthly.map(m=>m.m);
+  const totalPt = monthly.reduce((a,m)=>a+m.pt,0);
+  const totalRev = valid.reduce((a,m)=>a+m.申請,0);
+  const avgRev = valid.length ? Math.round(totalRev/valid.reduce((a,m)=>a+m.pt,0)) : 0;
+  const maxM = valid.length ? valid.reduce((a,m)=>m.申請>a.申請?m:a,valid[0]) : null;
+  const avgInit = valid.filter(m=>m.初診率).length ? (valid.filter(m=>m.初診率).reduce((a,m)=>a+m.初診率,0)/valid.filter(m=>m.初診率).length).toFixed(1) : '—';
+
+  if(currentUccTab==='summary'){
+    dc(['ucc-main','ucc-cpie','ucc-init2']);
+    cont.innerHTML = `
+    <div class="kpi-row">
+      <div class="kpi-card"><div class="kpi-label">申報件數</div><div class="kpi-val">${totalPt.toLocaleString()}</div><div class="kpi-sub">件（${currentYear}年）</div></div>
+      <div class="kpi-card"><div class="kpi-label">申請金額</div><div class="kpi-val up">${fmt(totalRev)}</div><div class="kpi-sub">元</div></div>
+      <div class="kpi-card"><div class="kpi-label">每件均費</div><div class="kpi-val">${avgRev.toLocaleString()}</div><div class="kpi-sub">元/件</div></div>
+      <div class="kpi-card"><div class="kpi-label">最高月份</div><div class="kpi-val up">${maxM?maxM.m:'—'}</div><div class="kpi-sub">${maxM?fmt(maxM.申請)+' 元':'—'}</div></div>
+      <div class="kpi-card"><div class="kpi-label">平均初診率</div><div class="kpi-val">${avgInit}%</div><div class="kpi-sub">各月平均</div></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">月份申請金額 vs 申報件數（${currentYear}年）</div>
+      <div class="leg"><span><span class="lb" style="background:var(--accent)"></span>申請金額</span><span><span class="lb" style="background:var(--green)"></span>件數</span></div>
+      <canvas id="ucc-main" height="220"></canvas>
+      <div class="note">${d.note}</div>
+    </div>
+    <div class="grid-2">
+      <div class="chart-card no-mb">
+        <div class="chart-title">內科 vs 外科件數佔比</div>
+        <canvas id="ucc-cpie" height="200"></canvas>
+      </div>
+      <div class="chart-card no-mb">
+        <div class="chart-title">月份初診率趨勢</div>
+        <canvas id="ucc-init2" height="200"></canvas>
+      </div>
+    </div>`;
+    setTimeout(()=>{
+      allCharts['ucc-main'] = new Chart(document.getElementById('ucc-main'),{
+        type:'bar',
+        data:{labels:valid.map(m=>m.m),datasets:[
+          {label:'申請金額',data:valid.map(m=>m.申請),backgroundColor:'#378ADD88',yAxisID:'y',order:2,borderRadius:4},
+          {label:'件數',data:valid.map(m=>m.pt),borderColor:'#1D9E75',type:'line',tension:.3,borderWidth:2,borderDash:[4,3],yAxisID:'y2',order:1,pointRadius:5,backgroundColor:'transparent'},
+        ]},
+        options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{autoSkip:false,font:{size:11}}},y:{ticks:{callback:v=>fmt(v),font:{size:11}}},y2:{position:'right',ticks:{font:{size:11}}}}}
+      });
+      const totI=valid.reduce((a,m)=>a+m.内科件,0),totS=valid.reduce((a,m)=>a+m.外科件,0);
+      allCharts['ucc-cpie'] = new Chart(document.getElementById('ucc-cpie'),{
+        type:'doughnut',
+        data:{labels:['內科','外科'],datasets:[{data:[totI,totS],backgroundColor:['#D85A3099','#BA751799'],borderWidth:0}]},
+        options:{responsive:true,cutout:'58%',plugins:{legend:{position:'right',labels:{font:{size:11}}}}}
+      });
+      const initD=valid.filter(m=>m.初診率);
+      allCharts['ucc-init2'] = new Chart(document.getElementById('ucc-init2'),{
+        type:'line',
+        data:{labels:initD.map(m=>m.m),datasets:[{label:'初診率%',data:initD.map(m=>m.初診率),borderColor:'#7F77DD',backgroundColor:'#7F77DD18',tension:.3,fill:true,borderWidth:2,pointRadius:4}]},
+        options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{autoSkip:false,font:{size:10}}},y:{ticks:{callback:v=>v+'%',font:{size:10}},min:20,max:55}}}
+      });
+    },50);
+  }
+
+  else if(currentUccTab==='weekly'){
+    dc(['ucc-wkbar','ucc-monbar','ucc-spct']);
+    cont.innerHTML = `
+    <div class="kpi-row">
+      <div class="kpi-card"><div class="kpi-label">週次紀錄</div><div class="kpi-val">${weekly.length}</div><div class="kpi-sub">週</div></div>
+      <div class="kpi-card"><div class="kpi-label">週平均人次</div><div class="kpi-val">${Math.round(weekly.reduce((a,w)=>a+w.total,0)/weekly.length)}</div><div class="kpi-sub">人/週</div></div>
+      <div class="kpi-card"><div class="kpi-label">最高單週</div><div class="kpi-val up">${Math.max(...weekly.map(w=>w.total))}人</div><div class="kpi-sub">${weekly.reduce((a,w)=>w.total>a.total?w:a,weekly[0]).d}</div></div>
+      <div class="kpi-card"><div class="kpi-label">最低單週</div><div class="kpi-val dn">${Math.min(...weekly.map(w=>w.total))}人</div><div class="kpi-sub">${weekly.reduce((a,w)=>w.total<a.total?w:a,weekly[0]).d}</div></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">週次就診人次（白班 + 小夜）</div>
+      <div class="leg"><span><span class="lb" style="background:var(--accent)"></span>白班</span><span><span class="lb" style="background:var(--green)"></span>小夜</span></div>
+      <canvas id="ucc-wkbar" height="220"></canvas>
+    </div>
+    <div class="grid-2">
+      <div class="chart-card no-mb">
+        <div class="chart-title">月份人次合計</div>
+        <canvas id="ucc-monbar" height="200"></canvas>
+      </div>
+      <div class="chart-card no-mb">
+        <div class="chart-title">外科人次佔比趨勢（週次）</div>
+        <canvas id="ucc-spct" height="200"></canvas>
+      </div>
+    </div>`;
+    setTimeout(()=>{
+      const wl=weekly.map(w=>w.d);
+      allCharts['ucc-wkbar'] = new Chart(document.getElementById('ucc-wkbar'),{
+        type:'bar',
+        data:{labels:wl,datasets:[
+          {label:'白班',data:weekly.map(w=>w.day),backgroundColor:'#378ADD88',stack:'s',borderRadius:2},
+          {label:'小夜',data:weekly.map(w=>w.night),backgroundColor:'#1D9E7588',stack:'s',borderRadius:2},
+        ]},
+        options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{stacked:true,ticks:{autoSkip:true,maxTicksLimit:16,maxRotation:45,font:{size:9}}},y:{stacked:true,ticks:{font:{size:10}}}}}
+      });
+      allCharts['ucc-monbar'] = new Chart(document.getElementById('ucc-monbar'),{
+        type:'bar',
+        data:{labels:monthly.map(m=>m.m),datasets:[{label:'人次',data:monthly.map(m=>m.pt),backgroundColor:'#7F77DD88',borderRadius:4}]},
+        options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{autoSkip:false,font:{size:10}}},y:{ticks:{font:{size:10}}}}}
+      });
+      allCharts['ucc-spct'] = new Chart(document.getElementById('ucc-spct'),{
+        type:'line',
+        data:{labels:wl,datasets:[{label:'外科佔比%',data:weekly.map(w=>Math.round(w.surgery/w.total*100)),borderColor:'#BA7517',backgroundColor:'#BA751718',tension:.3,fill:true,borderWidth:2,pointRadius:2}]},
+        options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{autoSkip:true,maxTicksLimit:16,maxRotation:45,font:{size:9}}},y:{ticks:{callback:v=>v+'%',font:{size:10}},min:20,max:80}}}
+      });
+    },50);
+  }
+
+  else if(currentUccTab==='revenue'){
+    dc(['ucc-revstack','ucc-avgrev','ucc-revpie']);
+    cont.innerHTML = `
+    <div class="chart-card">
+      <div class="chart-title">月份內外科申請金額堆疊（${currentYear}年）</div>
+      <div class="leg"><span><span class="lb" style="background:var(--red)"></span>內科</span><span><span class="lb" style="background:var(--gold)"></span>外科</span></div>
+      <canvas id="ucc-revstack" height="220"></canvas>
+    </div>
+    <div class="grid-2">
+      <div class="chart-card no-mb">
+        <div class="chart-title">每件平均申請金額</div>
+        <canvas id="ucc-avgrev" height="200"></canvas>
+      </div>
+      <div class="chart-card no-mb">
+        <div class="chart-title">內科 vs 外科申請金額佔比</div>
+        <canvas id="ucc-revpie" height="200"></canvas>
+      </div>
+    </div>`;
+    setTimeout(()=>{
+      allCharts['ucc-revstack'] = new Chart(document.getElementById('ucc-revstack'),{
+        type:'bar',
+        data:{labels:valid.map(m=>m.m),datasets:[
+          {label:'內科',data:valid.map(m=>m.内科申請),backgroundColor:'#D85A3099',stack:'s',borderRadius:2},
+          {label:'外科',data:valid.map(m=>m.外科申請),backgroundColor:'#BA751799',stack:'s',borderRadius:2},
+        ]},
+        options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{stacked:true,ticks:{autoSkip:false,font:{size:11}}},y:{stacked:true,ticks:{callback:v=>fmt(v),font:{size:11}}}}}
+      });
+      allCharts['ucc-avgrev'] = new Chart(document.getElementById('ucc-avgrev'),{
+        type:'bar',
+        data:{labels:valid.map(m=>m.m),datasets:[{label:'均費',data:valid.map(m=>Math.round(m.申請/m.pt)),backgroundColor:'#378ADD88',borderRadius:4}]},
+        options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{autoSkip:false,font:{size:10}}},y:{ticks:{font:{size:10}}}}}
+      });
+      const totI=valid.reduce((a,m)=>a+m.内科申請,0),totS=valid.reduce((a,m)=>a+m.外科申請,0);
+      allCharts['ucc-revpie'] = new Chart(document.getElementById('ucc-revpie'),{
+        type:'doughnut',
+        data:{labels:['內科','外科'],datasets:[{data:[totI,totS],backgroundColor:['#D85A3099','#BA751799'],borderWidth:0}]},
+        options:{responsive:true,cutout:'58%',plugins:{legend:{position:'right',labels:{font:{size:11}}}}}
+      });
+    },50);
+  }
+
+  else if(currentUccTab==='compare'){
+    dc(['ucc-cmp-rev','ucc-cmp-pt']);
+    // 找有資料的年度
+    const avail = Object.entries(DATA).filter(([yr,d])=>d!=null).map(([yr])=>parseInt(yr));
+    if(avail.length<2){
+      cont.innerHTML=`<div class="no-data-box"><div class="big">📊</div><h3>年度比較需要至少兩年資料</h3><p>目前僅有部分年度資料，<br>待 2023、2024 年資料匯入後即可啟用年度比較功能。</p></div>`;
+      return;
+    }
+    const COLORS=['#378ADD','#1D9E75','#D85A30','#BA7517'];
+    const allMonths=['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+    cont.innerHTML=`
+    <div class="chart-card">
+      <div class="chart-title">各年度申報件數比較（月份）</div>
+      <div class="leg">${avail.map((yr,i)=>`<span><span class="lb" style="background:${COLORS[i]}"></span>${yr}年</span>`).join('')}</div>
+      <canvas id="ucc-cmp-pt" height="220"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">各年度申請金額比較（月份）</div>
+      <div class="leg">${avail.map((yr,i)=>`<span><span class="lb" style="background:${COLORS[i]}"></span>${yr}年</span>`).join('')}</div>
+      <canvas id="ucc-cmp-rev" height="220"></canvas>
+    </div>`;
+    setTimeout(()=>{
+      allCharts['ucc-cmp-pt'] = new Chart(document.getElementById('ucc-cmp-pt'),{
+        type:'line',
+        data:{labels:allMonths,datasets:avail.map((yr,i)=>({
+          label:yr+'年',
+          data:allMonths.map(m=>{const row=DATA[yr].monthly.find(r=>r.m===m);return row?row.pt:null;}),
+          borderColor:COLORS[i],backgroundColor:'transparent',tension:.3,borderWidth:2,pointRadius:4,spanGaps:false
+        }))},
+        options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{autoSkip:false,font:{size:10}}},y:{ticks:{font:{size:10}}}}}
+      });
+      allCharts['ucc-cmp-rev'] = new Chart(document.getElementById('ucc-cmp-rev'),{
+        type:'line',
+        data:{labels:allMonths,datasets:avail.map((yr,i)=>({
+          label:yr+'年',
+          data:allMonths.map(m=>{const row=DATA[yr].monthly.find(r=>r.m===m&&r.申請!=null);return row?row.申請:null;}),
+          borderColor:COLORS[i],backgroundColor:'transparent',tension:.3,borderWidth:2,pointRadius:4,spanGaps:false
+        }))},
+        options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{autoSkip:false,font:{size:10}}},y:{ticks:{callback:v=>fmt(v),font:{size:10}}}}}
+      });
+    },50);
+  }
+
+  else if(currentUccTab==='table'){
+    const tot=monthly.reduce((a,m)=>({
+      pt:a.pt+m.pt,
+      申請:m.申請!=null?a.申請+m.申請:a.申請,
+      内科件:a.内科件+m.内科件,外科件:a.外科件+m.外科件,
+      内科申請:m.内科申請!=null?a.内科申請+m.内科申請:a.内科申請,
+      外科申請:m.外科申請!=null?a.外科申請+m.外科申請:a.外科申請,
+      初診:m.初診!=null?a.初診+m.初診:a.初診
+    }),{pt:0,申請:0,内科件:0,外科件:0,内科申請:0,外科申請:0,初診:0});
+    cont.innerHTML=`
+    <div class="chart-card" style="overflow-x:auto">
+      <div class="chart-title">${currentYear}年 月份明細彙總表</div>
+      <table class="dtbl">
+        <thead><tr>
+          <th style="text-align:left">月份</th><th>件數</th><th>內科件</th><th>外科件</th>
+          <th>申請金額</th><th>內科金額</th><th>外科金額</th><th>均費/件</th><th>初診（率）</th>
+        </tr></thead>
+        <tbody>
+          ${monthly.map(m=>`<tr>
+            <td>${m.m}</td><td>${m.pt}</td><td>${m.内科件}</td><td>${m.外科件}</td>
+            <td>${fmtN(m.申請)}</td><td>${fmtN(m.内科申請)}</td><td>${fmtN(m.外科申請)}</td>
+            <td>${m.申請?Math.round(m.申請/m.pt).toLocaleString():'—'}</td>
+            <td>${m.初診!=null?m.初診+'（'+m.初診率+'%）':'—'}</td>
+          </tr>`).join('')}
+          <tr>
+            <td>合計</td><td>${tot.pt}</td><td>${tot.内科件}</td><td>${tot.外科件}</td>
+            <td>${tot.申請.toLocaleString()}</td><td>${tot.内科申請.toLocaleString()}</td><td>${tot.外科申請.toLocaleString()}</td>
+            <td>${Math.round(tot.申請/tot.pt).toLocaleString()}</td><td>${tot.初診}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="note">${d.note}</div>
+    </div>`;
+  }
+}
+
+// ==============================
+// INIT
+// ==============================
+document.getElementById('todayDate').textContent = (()=>{const t=new Date();return `${t.getFullYear()}/${String(t.getMonth()+1).padStart(2,'0')}/${String(t.getDate()).padStart(2,'0')}`;})();
+initOverview();
+</script>
+</body>
+</html>
