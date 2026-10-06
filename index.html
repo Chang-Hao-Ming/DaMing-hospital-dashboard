@@ -154,11 +154,11 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
       <div class="sum-row">
         <div class="sum-card" onclick="showPage('ucc',document.querySelectorAll('.nav-item')[1])">
           <div class="sum-icon" style="background:#EBF5FF">🚑</div>
-          <div class="sum-info"><div class="lbl">UCC 累計申報件數</div><div class="val" style="color:var(--accent)">1,552 件</div><div class="tr up">↑ 2025年11月－5月</div></div>
+          <div class="sum-info"><div class="lbl">UCC 累計就診人次</div><div class="val" style="color:var(--accent)" id="kpi-total-pt">載入中...</div><div class="tr up" id="kpi-date-range">—</div></div>
         </div>
         <div class="sum-card" onclick="showPage('ucc',document.querySelectorAll('.nav-item')[1])">
           <div class="sum-icon" style="background:#EDFAF5">💰</div>
-          <div class="sum-info"><div class="lbl">UCC 累計申請金額</div><div class="val" style="color:var(--green)">188.6 萬元</div><div class="tr" style="color:var(--sub)">含春節、連假加成</div></div>
+          <div class="sum-info"><div class="lbl">UCC 週平均人次</div><div class="val" style="color:var(--green)" id="kpi-avg-pt">載入中...</div><div class="tr" style="color:var(--sub)" id="kpi-week-count">—</div></div>
         </div>
         <div class="sum-card" onclick="showPage('checkup',document.querySelectorAll('.nav-item')[2])">
           <div class="sum-icon" style="background:#FFF4ED">🔬</div>
@@ -357,6 +357,26 @@ function initOverview(){
     if(DATA[yr]) DATA[yr].monthly.forEach(m=>all.push({...m, yr}));
   });
   if(all.length===0){ document.getElementById('mainContent').innerHTML='<div style="text-align:center;padding:60px;color:var(--sub)">⏳ 載入中...</div>'; return; }
+
+  // 動態更新KPI卡片
+  const totalPt = all.reduce((a,m)=>a+m.pt,0);
+  const hasData = all.filter(m=>m.pt>0);
+  const firstM = hasData[0];
+  const lastM = hasData[hasData.length-1];
+  const rangeText = firstM && lastM ? `↑ ${firstM.yr}年${firstM.m} － ${lastM.yr}年${lastM.m}` : '—';
+  const elPt = document.getElementById('kpi-total-pt');
+  const elRange = document.getElementById('kpi-date-range');
+  if(elPt) elPt.textContent = totalPt.toLocaleString() + ' 人次';
+  if(elRange) elRange.textContent = rangeText;
+
+  // 週平均
+  const allWeekly = [];
+  [2025,2026].forEach(yr=>{ if(DATA[yr]) allWeekly.push(...DATA[yr].weekly); });
+  const avgPt = allWeekly.length ? Math.round(allWeekly.reduce((a,w)=>a+w.total,0)/allWeekly.length) : 0;
+  const elAvg = document.getElementById('kpi-avg-pt');
+  const elWk = document.getElementById('kpi-week-count');
+  if(elAvg) elAvg.textContent = avgPt + ' 人/週';
+  if(elWk) elWk.textContent = `共 ${allWeekly.length} 週紀錄`;
 
   // 月份人次走勢（所有有資料的月份）
   const ptData = all.filter(m=>m.pt>0);
