@@ -252,7 +252,10 @@ async function fetchSheetData() {
   try {
     const res = await fetch(url);
     const text = await res.text();
-    const json = JSON.parse(text.substring(47).slice(0, -2));
+    // 移除 Google 包裹的回呼函數，只保留 JSON 部分
+    const jsonStart = text.indexOf('{');
+    const jsonEnd = text.lastIndexOf('}');
+    const json = JSON.parse(text.substring(jsonStart, jsonEnd + 1));
     const rows = json.table.rows;
     const weekly = [];
     for (const row of rows) {
@@ -353,8 +356,8 @@ function initOverview(){
   dc(['ov-rev','ov-pie','ov-init']);
   // 合併所有有資料的年度月份
   const all = [];
-  [2025,2026].forEach(yr=>{
-    if(DATA[yr]) DATA[yr].monthly.forEach(m=>all.push({...m, yr}));
+  [2023,2024,2025,2026].forEach(yr=>{
+    if(DATA[yr] && DATA[yr].monthly) DATA[yr].monthly.forEach(m=>all.push({...m, yr}));
   });
   if(all.length===0){ document.getElementById('mainContent').innerHTML='<div style="text-align:center;padding:60px;color:var(--sub)">⏳ 載入中...</div>'; return; }
 
