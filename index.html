@@ -174,10 +174,10 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
         </div>
       </div>
       <div class="chart-card">
-        <div class="chart-title">UCC 月份申請金額趨勢（2025年）</div>
-        <div class="leg"><span><span class="lb" style="background:var(--accent)"></span>申請金額</span><span><span class="lb" style="background:var(--green)"></span>申報件數</span></div>
+        <div class="chart-title">UCC 月份就診人次趨勢（自動從試算表更新）</div>
+        <div class="leg"><span><span class="lb" style="background:var(--accent)"></span>月合計人次</span><span><span class="lb" style="background:var(--red)"></span>內科人次</span></div>
         <canvas id="ov-rev" height="200"></canvas>
-        <div class="note">其他業務資料匯入後將自動整合至此總覽頁</div>
+        <div class="note">資料來源：大明統計試算表，每次開啟自動更新</div>
       </div>
       <div class="grid-2">
         <div class="chart-card no-mb">
@@ -185,7 +185,7 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
           <canvas id="ov-pie" height="200"></canvas>
         </div>
         <div class="chart-card no-mb">
-          <div class="chart-title">UCC 月份初診率（2025年）</div>
+          <div class="chart-title">UCC 月份人次走勢</div>
           <canvas id="ov-init" height="200"></canvas>
         </div>
       </div>
@@ -351,30 +351,39 @@ function setYear(yr, btn){
 // ==============================
 function initOverview(){
   dc(['ov-rev','ov-pie','ov-init']);
-  // Combine 2025+2026 monthly for overview
-  const all = [...(DATA[2025].monthly), ...(DATA[2026].monthly)];
-  const valid = all.filter(m=>m.申請!=null);
-  const ML = all.map(m=>m.m);
+  // 合併所有有資料的年度月份
+  const all = [];
+  [2025,2026].forEach(yr=>{
+    if(DATA[yr]) DATA[yr].monthly.forEach(m=>all.push({...m, yr}));
+  });
+  if(all.length===0){ document.getElementById('mainContent').innerHTML='<div style="text-align:center;padding:60px;color:var(--sub)">⏳ 載入中...</div>'; return; }
+
+  // 月份人次走勢（所有有資料的月份）
+  const ptData = all.filter(m=>m.pt>0);
+  const labels2 = ptData.map(m=>(m.yr===2025?'25/':' 26/')+m.m);
 
   allCharts['ov-rev'] = new Chart(document.getElementById('ov-rev'),{
     type:'bar',
-    data:{labels:valid.map(m=>m.m),datasets:[
-      {label:'申請金額',data:valid.map(m=>m.申請),backgroundColor:'#378ADD88',yAxisID:'y',order:2,borderRadius:4},
-      {label:'件數',data:valid.map(m=>m.pt),borderColor:'#1D9E75',type:'line',tension:.3,borderWidth:2,borderDash:[4,3],yAxisID:'y2',order:1,pointRadius:4,backgroundColor:'transparent'},
+    data:{labels:labels2,datasets:[
+      {label:'月人次',data:ptData.map(m=>m.pt),backgroundColor:'#378ADD88',yAxisID:'y',order:2,borderRadius:4},
+      {label:'內科',data:ptData.map(m=>m.内科件),borderColor:'#D85A30',type:'line',tension:.3,borderWidth:2,borderDash:[4,3],yAxisID:'y',order:1,pointRadius:3,backgroundColor:'transparent'},
     ]},
-    options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{autoSkip:false,font:{size:10}}},y:{ticks:{callback:v=>fmt(v),font:{size:10}}},y2:{position:'right',ticks:{font:{size:10}}}}}
+    options:{responsive:true,plugins:{legend:{labels:{font:{size:10}}}},scales:{x:{ticks:{autoSkip:false,maxRotation:45,font:{size:9}}},y:{ticks:{font:{size:10}}}}}
   });
-  const totI=valid.reduce((a,m)=>a+m.内科申請,0), totS=valid.reduce((a,m)=>a+m.外科申請,0);
+
+  // 內外科人次佔比（所有資料合計）
+  const totI=all.reduce((a,m)=>a+m.内科件,0), totS=all.reduce((a,m)=>a+m.外科件,0);
   allCharts['ov-pie'] = new Chart(document.getElementById('ov-pie'),{
     type:'doughnut',
     data:{labels:['內科','外科'],datasets:[{data:[totI,totS],backgroundColor:['#D85A3099','#BA751799'],borderWidth:0}]},
     options:{responsive:true,cutout:'60%',plugins:{legend:{position:'right',labels:{font:{size:11}}}}}
   });
-  const initValid = valid.filter(m=>m.初診率!=null);
+
+  // 月份人次折線趨勢
   allCharts['ov-init'] = new Chart(document.getElementById('ov-init'),{
     type:'line',
-    data:{labels:initValid.map(m=>m.m),datasets:[{label:'初診率%',data:initValid.map(m=>m.初診率),borderColor:'#7F77DD',backgroundColor:'#7F77DD18',tension:.3,fill:true,borderWidth:2,pointRadius:4}]},
-    options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{autoSkip:false,font:{size:10}}},y:{ticks:{callback:v=>v+'%',font:{size:10}},min:20,max:55}}}
+    data:{labels:labels2,datasets:[{label:'合計人次',data:ptData.map(m=>m.pt),borderColor:'#7F77DD',backgroundColor:'#7F77DD18',tension:.3,fill:true,borderWidth:2,pointRadius:3}]},
+    options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{autoSkip:false,maxRotation:45,font:{size:9}}},y:{ticks:{font:{size:10}}}}}
   });
 }
 
