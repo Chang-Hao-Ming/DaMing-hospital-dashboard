@@ -247,7 +247,8 @@ function monthLabel(m) {
   return m + '月';
 }
 
-// 從 Google Sheets 抓申報金額（UCC申報工作表）
+// 從 Google Sheets 抓申報金額（UCC申報工作表，週次格式含申報金額）
+// 欄位：日期, 內科白班, 外科白班, 白班, 內科夜班, 外科夜班, 夜班, (空), 申報金額內科, 申報金額外科, 申報總金額
 async function fetchRevenueData() {
   const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_REV)}`;
   try {
@@ -257,15 +258,29 @@ async function fetchRevenueData() {
     const jsonEnd = text.lastIndexOf('}');
     const json = JSON.parse(text.substring(jsonStart, jsonEnd + 1));
     const rows = json.table.rows;
-    // 回傳 { '2025/11': {pt:136, amt:201712}, ... }
+    // 按年月加總申報金額 → { '2025/11': {内科:x, 外科:y, 總:z}, ... }
     const revMap = {};
     for (const row of rows) {
-      const ymRaw = row.c[0]?.v;
-      if (!ymRaw) continue;
-      const ym = String(ymRaw).trim(); // e.g. '2025/11'
-      const pt = parseInt(row.c[1]?.v) || 0;
-      const amt = parseInt(row.c[2]?.v) || 0;
-      revMap[ym] = { pt, amt };
+      const dateVal = row.c[0]?.v;
+      if (!dateVal) continue;
+      let dateStr = '';
+      if (typeof dateVal === 'string' && dateVal.startsWith('Date(')) {
+        const parts = dateVal.replace('Date(','').replace(')','').split(',');
+        const y = parseInt(parts[0]);
+        const mo = parseInt(parts[1]) + 1;
+        dateStr = `${y}/${String(mo).padStart(2,'0')}`;
+      } else {
+        const s = String(dateVal);
+        dateStr = s.substring(0,7); // 取 YYYY/MM
+      }
+      const 内科 = parseFloat(row.c[8]?.v) || 0;
+      const 外科 = parseFloat(row.c[9]?.v) || 0;
+      const 總 = parseFloat(row.c[10]?.v) || 0;
+      if (内科 + 外科 + 總 === 0) continue;
+      if (!revMap[dateStr]) revMap[dateStr] = { 内科: 0, 外科: 0, 總: 0 };
+      revMap[dateStr].内科 += 内科;
+      revMap[dateStr].外科 += 外科;
+      revMap[dateStr].總 += 總 || (内科 + 外科);
     }
     return revMap;
   } catch(e) {
@@ -331,10 +346,10 @@ async function fetchSheetData() {
       for (const [mo, mdata] of Object.entries(months)) {
         const moNum = String(mo).padStart(2,'0');
         const ymKey = `${yr}/${moNum}`;
-        if (revMap[ymKey]) {
-          mdata.申請 = revMap[ymKey].amt;
-          mdata.内科申請 = null; // 目前彙整表只有總金額
-          mdata.外科申請 = null;
+        if (revMap[ymKey] && revMap[ymKey].總 > 0) {
+          mdata.申請 = Math.round(revMap[ymKey].總);
+          mdata.内科申請 = Math.round(revMap[ymKey].内科);
+          mdata.外科申請 = Math.round(revMap[ymKey].外科);
         }
       }
       const monthly = Object.keys(months).sort((a,b)=>a-b).map(k => months[k]);
