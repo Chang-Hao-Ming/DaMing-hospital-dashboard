@@ -129,7 +129,7 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
     <div class="nav-item" onclick="showPage('surgery',this)"><span class="ico">🩺</span><span class="label">外科處置</span><span class="nbadge">待匯入</span></div>
     <div class="nav-item" onclick="showPage('internal',this)"><span class="ico">💊</span><span class="label">內科門診</span><span class="nbadge">待匯入</span></div>
   </nav>
-  <div class="sidebar-footer">最後更新：2026/06</div>
+  <div class="sidebar-footer">最後更新：2026/10</div>
 </aside>
 
 <main class="main">
@@ -144,7 +144,7 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
     <button class="ybtn no-data" onclick="setYear(2023,this)" id="ybtn-2023">2023年<span class="ybadge">無資料</span></button>
     <button class="ybtn no-data" onclick="setYear(2024,this)" id="ybtn-2024">2024年<span class="ybadge">無資料</span></button>
     <button class="ybtn active" onclick="setYear(2025,this)" id="ybtn-2025">2025年<span class="ybadge">有資料</span></button>
-    <button class="ybtn no-data" onclick="setYear(2026,this)" id="ybtn-2026">2026年<span class="ybadge">部分</span></button>
+    <button class="ybtn" onclick="setYear(2026,this)" id="ybtn-2026">2026年<span class="ybadge">有資料</span></button>
   </div>
 
   <div class="content">
@@ -230,6 +230,7 @@ body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:
 // ==============================
 const SHEET_ID = '11_r_-HMlD4UmkT51fhSLgQHgoVunenObmBLWnc40Jd0';
 const SHEET_NAME = 'UCC';
+const SHEET_REV = 'UCC申報';
 
 // 月份判斷輔助
 function getMonth(dateStr) {
@@ -244,6 +245,33 @@ function getYear(dateStr) {
 }
 function monthLabel(m) {
   return m + '月';
+}
+
+// 從 Google Sheets 抓申報金額（UCC申報工作表）
+async function fetchRevenueData() {
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(SHEET_REV)}`;
+  try {
+    const res = await fetch(url);
+    const text = await res.text();
+    const jsonStart = text.indexOf('{');
+    const jsonEnd = text.lastIndexOf('}');
+    const json = JSON.parse(text.substring(jsonStart, jsonEnd + 1));
+    const rows = json.table.rows;
+    // 回傳 { '2025/11': {pt:136, amt:201712}, ... }
+    const revMap = {};
+    for (const row of rows) {
+      const ymRaw = row.c[0]?.v;
+      if (!ymRaw) continue;
+      const ym = String(ymRaw).trim(); // e.g. '2025/11'
+      const pt = parseInt(row.c[1]?.v) || 0;
+      const amt = parseInt(row.c[2]?.v) || 0;
+      revMap[ym] = { pt, amt };
+    }
+    return revMap;
+  } catch(e) {
+    console.warn('申報金額載入失敗:', e);
+    return {};
+  }
 }
 
 // 從 Google Sheets 抓資料
@@ -293,9 +321,22 @@ async function fetchSheetData() {
       yearMap[w.yr][key].内科件 += w.internal;
       yearMap[w.yr][key].外科件 += w.surgery;
     }
+    // 抓申報金額
+    const revMap = await fetchRevenueData();
+
     // 組成 DATA 格式
     const DATA = { 2023: null, 2024: null };
     for (const [yr, months] of Object.entries(yearMap)) {
+      // 把申報金額合併進月份資料
+      for (const [mo, mdata] of Object.entries(months)) {
+        const moNum = String(mo).padStart(2,'0');
+        const ymKey = `${yr}/${moNum}`;
+        if (revMap[ymKey]) {
+          mdata.申請 = revMap[ymKey].amt;
+          mdata.内科申請 = null; // 目前彙整表只有總金額
+          mdata.外科申請 = null;
+        }
+      }
       const monthly = Object.keys(months).sort((a,b)=>a-b).map(k => months[k]);
       const yrWeekly = weekly.filter(w => w.yr === parseInt(yr));
       DATA[yr] = { monthly, weekly: yrWeekly, note: `${yr}年資料自動從試算表載入` };
